@@ -54,13 +54,17 @@ def listen(conn, addr):
 
 # receive incoming connections and spawn a new thread to handle each connection
 def get_connections():
+    counter = 0
     while True:
         try:
             conn, addr = in_sock.accept()
+            counter += 1
         except:
             print("exception in accept", flush=True)
             break
         print("connected to inbound client", flush=True)
+        if counter == 4:
+            print("all clients connected", flush=True)
         threading.Thread(target=listen, args=(conn, addr)).start()
 
 # -------------------------------------------------------------------------------------------------
