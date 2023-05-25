@@ -84,6 +84,7 @@ if __name__ == "__main__":
     IP = socket.gethostname()
     PORT = 9000 + idNum
     QUEUE = []
+    IDS = {}
 
     # create an inbound socket object to listen for incoming connections
     in_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -93,56 +94,79 @@ if __name__ == "__main__":
     threading.Thread(target=get_connections).start()
 
     # create outbound socket objects to connect to other nodes
-    sleep(8)
+    sleep(5)
     out_sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     out_sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     out_sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     out_sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
     if idNum == 1:
         out_sock1.connect((IP, 9002))
         out_sock2.connect((IP, 9003))
-        out_sock3.connect((IP, 9004))
-        out_sock4.connect((IP, 9005))
         out_socks[2] = out_sock1
         out_socks[3] = out_sock2
-        out_socks[4] = out_sock3
-        out_socks[5] = out_sock4
+ 
     if idNum == 2:
         out_sock1.connect((IP, 9001))
         out_sock2.connect((IP, 9003))
-        out_sock3.connect((IP, 9004))
-        out_sock4.connect((IP, 9005))
         out_socks[1] = out_sock1
         out_socks[3] = out_sock2
-        out_socks[4] = out_sock3
-        out_socks[5] = out_sock4
+
     if idNum == 3:
         out_sock1.connect((IP, 9001))
         out_sock2.connect((IP, 9002))
-        out_sock3.connect((IP, 9004))
-        out_sock4.connect((IP, 9005))
         out_socks[1] = out_sock1
         out_socks[2] = out_sock2
-        out_socks[4] = out_sock3
-        out_socks[5] = out_sock4
-    if idNum == 4:
-        out_sock1.connect((IP, 9001))
-        out_sock2.connect((IP, 9002))
-        out_sock3.connect((IP, 9003))
-        out_sock4.connect((IP, 9005))
-        out_socks[1] = out_sock1
-        out_socks[2] = out_sock2
-        out_socks[3] = out_sock3
-        out_socks[5] = out_sock4
-    if idNum == 5:
-        out_sock1.connect((IP, 9001))
-        out_sock2.connect((IP, 9002))
-        out_sock3.connect((IP, 9003))
-        out_sock4.connect((IP, 9004))
-        out_socks[1] = out_sock1
-        out_socks[2] = out_sock2
-        out_socks[3] = out_sock3
-        out_socks[4] = out_sock4
+
+
+    # -------------------------------------------------------------------------------------
+    # --------------------------- CODE BELOW IS FOR 5 NODES -------------------------------
+
+    # if idNum == 1:
+    #     out_sock1.connect((IP, 9002))
+    #     out_sock2.connect((IP, 9003))
+    #     out_sock3.connect((IP, 9004))
+    #     out_sock4.connect((IP, 9005))
+    #     out_socks[2] = out_sock1
+    #     out_socks[3] = out_sock2
+    #     out_socks[4] = out_sock3
+    #     out_socks[5] = out_sock4
+    # if idNum == 2:
+    #     out_sock1.connect((IP, 9001))
+    #     out_sock2.connect((IP, 9003))
+    #     out_sock3.connect((IP, 9004))
+    #     out_sock4.connect((IP, 9005))
+    #     out_socks[1] = out_sock1
+    #     out_socks[3] = out_sock2
+    #     out_socks[4] = out_sock3
+    #     out_socks[5] = out_sock4
+    # if idNum == 3:
+    #     out_sock1.connect((IP, 9001))
+    #     out_sock2.connect((IP, 9002))
+    #     out_sock3.connect((IP, 9004))
+    #     out_sock4.connect((IP, 9005))
+    #     out_socks[1] = out_sock1
+    #     out_socks[2] = out_sock2
+    #     out_socks[4] = out_sock3
+    #     out_socks[5] = out_sock4
+    # if idNum == 4:
+    #     out_sock1.connect((IP, 9001))
+    #     out_sock2.connect((IP, 9002))
+    #     out_sock3.connect((IP, 9003))
+    #     out_sock4.connect((IP, 9005))
+    #     out_socks[1] = out_sock1
+    #     out_socks[2] = out_sock2
+    #     out_socks[3] = out_sock3
+    #     out_socks[5] = out_sock4
+    # if idNum == 5:
+    #     out_sock1.connect((IP, 9001))
+    #     out_sock2.connect((IP, 9002))
+    #     out_sock3.connect((IP, 9003))
+    #     out_sock4.connect((IP, 9004))
+    #     out_socks[1] = out_sock1
+    #     out_socks[2] = out_sock2
+    #     out_socks[3] = out_sock3
+    #     out_socks[4] = out_sock4
 
     
     # spawn a new thread to wait for user input
