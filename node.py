@@ -30,10 +30,10 @@ TODO:
         - load blockchain and blog from disk
 
     PRIORITY FOR DEMO (according to project description):
-    - (1) Normal multi paxos operation with replicated log (ie blockchain and blog)
-    - (2) crash failure and recovery from disk/reconection to network
-    - (3) fail link and fix link (to simulate partitioning)
-    - (4) blog post application 
+    - (1) (done) Normal multi paxos operation with replicated log (ie blockchain and blog)
+    - (2) (todo) Crash failure and recovery from disk/reconection to network
+    - (3) (todo) Fail link and fix link (to simulate partitioning)
+    - (4) (todo) Blog post application 
 
 """
 
@@ -67,7 +67,9 @@ def get_user_input():
             else: # act as acceptor
                 out_socks[leader_id].sendall(f"FORWARD {idNum} {user_input}".encode())
         if user_input.split(" ")[0] == "crash":
-            pass
+            in_sock.close()
+            stdout.flush()
+            _exit(0)
         if user_input.split(" ")[0] == "failLink":
             pass
         if user_input.split(" ")[0] == "fixLink":
@@ -125,6 +127,8 @@ def get_user_input():
 def handle_msg(data, conn, addr):
     """simulates network delay then handles received message"""
     global promises, accepted, leader_id
+    blockchain_filename = f"N{idNum}_blockchain_log.txt"
+    blog_filename = f"N{idNum}_blog_log.txt"
     sleep(3) 
     data = data.decode()
     try:
@@ -149,6 +153,8 @@ def handle_msg(data, conn, addr):
             leader_id = data.split(" ")[1]
             op_string = data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5] + " " + data.split(" ")[6]
             out_socks[int(data.split(" ")[1])].sendall(f"ACCEPTED {idNum} {op_string}".encode())
+            with open(blockchain_filename, "a") as log:
+                    log.write(f"TENATIVE {op_string}\n")
         if data.split(" ")[0] == "ACCEPTED":
             sleep(0.5) # Chris: Added this bc lines were printing on top of each other
             print(f"recieved ACCEPTED from N{data.split(' ')[1]}")
@@ -157,7 +163,11 @@ def handle_msg(data, conn, addr):
                 accepted = 0
                 new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
                 blockchain.add_block(new_block)
+                with open(blockchain_filename, "a") as log:
+                    log.write(f"CONFIRMED {new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
                 blog.add_post(data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+                with open(blog_filename, "a") as log:
+                    log.write(f"{new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
                 QUEUE.pop(0)
                 for node in out_socks.values():
                     node.sendall(f"DECIDE {idNum} {new_block.op} {new_block.username} {new_block.title} {new_block.content}".encode())
@@ -165,7 +175,14 @@ def handle_msg(data, conn, addr):
             print(f"recieved DECIDE from N{data.split(' ')[1]}")
             new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
             blockchain.add_block(new_block)
+            lines = open(blockchain_filename, 'r').readlines()
+            lines[-1] = f"CONFIRMED {new_block.op} {new_block.username} {new_block.title} {new_block.content}\n"
+            out = open(blockchain_filename, 'w')
+            out.writelines(lines)
+            out.close()
             blog.add_post(data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+            with open(blog_filename, "a") as log:
+                    log.write(f"{new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
         if data.split(" ")[0] == "FORWARD":
             print(f"recieved FORWARD from {data.split(' ')[1]}")
             if leader_id == idNum:
@@ -177,8 +194,6 @@ def handle_msg(data, conn, addr):
                     node.sendall(f"ACCEPT {idNum} {blockchain.get_depth()} {new_block.op} {new_block.username} {new_block.title} {new_block.content} {new_block.nonce}".encode())
             else:
                 out_socks[leader_id].sendall(f"FORWARD {idNum} {op_string}".encode())
-    # except:
-    #     print(f"exception in handling request", flush=True)
     except Exception:
         traceback.print_exc()
 
