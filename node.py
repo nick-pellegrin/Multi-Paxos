@@ -29,6 +29,12 @@ TODO:
     - implement node restart/reconnection to network
         - load blockchain and blog from disk
 
+    PRIORITY FOR DEMO (according to project description):
+    - (1) Normal multi paxos operation with replicated log (ie blockchain and blog)
+    - (2) crash failure and recovery from disk/reconection to network
+    - (3) fail link and fix link (to simulate partitioning)
+    - (4) blog post application 
+
 """
 
 
