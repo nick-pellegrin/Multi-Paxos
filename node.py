@@ -10,6 +10,27 @@ from blockchain import Block
 from blog import Blog
 import traceback
 
+"""
+TODO:
+    - implement the comment feature 
+        - added get_postexists() to blockchain to check if post exists
+        - coments should still be added to blockchain
+    - implement timeout election process if leader fails to respond
+    - implement prepare rejection if leader already exists
+        - possible edge case if leader fails and initiates election proceess upon restart
+        - all nodes should change leader_id back to None after leader timeout
+    - implement disk backup
+        - leader writes new block after addition is accepted by acceptors as decided
+        - acceptors write new block after receiving new block from leader as tenative
+        - acceptor confirms new block as decided on disk after receiving decide from leader
+        - after block is decided on disk, write change to blog on disk
+    - implement the crash feature for a node
+    - implplement fail link and fix link (to simulate partitioning)
+    - implement node restart/reconnection to network
+        - load blockchain and blog from disk
+
+"""
+
 
 def get_user_input():
     """keep waiting for user inputs"""
@@ -26,6 +47,8 @@ def get_user_input():
             # Blog Format: blog
             # View Format: view <username>
             # Read Format: read <title>
+            if user_input.split(" ")[0] == "comment" and blockchain.get_postexists(user_input.split(" ")[2]) == False:
+                print("POST DOES NOT EXIST", flush=True)
             if leader_id == idNum: # act as leader
                 QUEUE.append(user_input)
                 new_block = Block(blockchain.get_latest_block().hash, user_input.split(" ")[0], user_input.split(" ")[1], user_input.split(" ")[2], user_input.split(" ")[3])

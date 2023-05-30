@@ -76,3 +76,9 @@ class Blockchain:
     def get_depth(self):
         return len(self.chain)
     
+    def get_postexists(self, title):
+        for block in self.chain:
+            if block.title == title and block.op == "post":
+                return True
+        return False
+    
