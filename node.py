@@ -20,7 +20,12 @@ def get_user_input():
             in_sock.close()
             stdout.flush()
             _exit(0)
-        if user_input.split(" ")[0] == "post" or user_input.split(" ")[0] == "comment":
+        if user_input.split(" ")[0] == "post" or user_input.split(" ")[0] == "comment": # Chris: we need to implement the comment feature
+            # Post Format: post <username> <title> <content>
+            # Comment Format: comment <username> <title> <content>
+            # Blog Format: blog
+            # View Format: view <username>
+            # Read Format: read <title>
             if leader_id == idNum: # act as leader
                 QUEUE.append(user_input)
                 new_block = Block(blockchain.get_latest_block().hash, user_input.split(" ")[0], user_input.split(" ")[1], user_input.split(" ")[2], user_input.split(" ")[3])
@@ -47,9 +52,14 @@ def get_user_input():
                 print("BLOG EMPTY", flush=True)
             else:
                 titles = []
+                counter = 0
                 for block in blockchain.chain:
+                    if counter == 0:
+                        counter += 1            # Chris: Added this counter bc it was printing out a 0 for the first title
+                        continue
                     titles.append(block.title)
-                print(titles, flush=True)
+                for title in titles:
+                    print(str(title), flush=True)         
         if user_input.split(" ")[0] == "view":
             this_user = user_input.split(" ")[1]
             content = []
@@ -59,7 +69,8 @@ def get_user_input():
             if len(content) == 0:
                 print("NO POSTS", flush=True)
             else:
-                print(content, flush=True)
+                for post in content:
+                    print(str(post[0]) + ": " + str(post[1]), flush=True)
         if user_input.split(" ")[0] == "read":
             this_title = user_input.split(" ")[1]
             content = []
@@ -69,7 +80,8 @@ def get_user_input():
             if len(content) == 0:
                 print("POST NOT FOUND", flush=True)
             else:
-                print(content, flush=True)
+                for post in content:
+                    print(str(post[0]) + ": " + str(post[1]), flush=True)
         
         # FOR TESTING PURPOSES ONLY
         if user_input == "leader":
@@ -88,11 +100,11 @@ def handle_msg(data, conn, addr):
     data = data.decode()
     try:
         if data.split(" ")[0] == "PREPARE" and int(data.split(" ")[2]) >= blockchain.get_depth():
-            print(f"recieved PREPARE from {data.split(' ')[1]}")
+            print(f"recieved PREPARE from N{data.split(' ')[1]}")
             op_string = data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5] + " " + data.split(" ")[6]
             out_socks[int(data.split(" ")[1])].sendall(f"PROMISE {idNum} {op_string}".encode())
         if data.split(" ")[0] == "PROMISE":
-            print(f"recieved PROMISE from {data.split(' ')[1]}")
+            print(f"recieved PROMISE from N{data.split(' ')[1]}")
             promises += 1
             if promises >= 2:
                 promises = 0
@@ -104,12 +116,13 @@ def handle_msg(data, conn, addr):
                 for node in out_socks.values():
                     node.sendall(f"ACCEPT {idNum} {blockchain.get_depth()} {new_block.op} {new_block.username} {new_block.title} {new_block.content} {new_block.nonce}".encode())
         if data.split(" ")[0] == "ACCEPT" and int(data.split(" ")[2]) >= blockchain.get_depth():
-            print(f"recieved ACCEPT from {data.split(' ')[1]}")
+            print(f"recieved ACCEPT from N{data.split(' ')[1]}")
             leader_id = data.split(" ")[1]
             op_string = data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5] + " " + data.split(" ")[6]
             out_socks[int(data.split(" ")[1])].sendall(f"ACCEPTED {idNum} {op_string}".encode())
         if data.split(" ")[0] == "ACCEPTED":
-            print(f"recieved ACCEPTED from {data.split(' ')[1]}")
+            sleep(0.5) # Chris: Added this bc lines were printing on top of each other
+            print(f"recieved ACCEPTED from N{data.split(' ')[1]}")
             accepted += 1
             if accepted >= 2:
                 accepted = 0
@@ -120,7 +133,7 @@ def handle_msg(data, conn, addr):
                 for node in out_socks.values():
                     node.sendall(f"DECIDE {idNum} {new_block.op} {new_block.username} {new_block.title} {new_block.content}".encode())
         if data.split(" ")[0] == "DECIDE":
-            print(f"recieved DECIDE from {data.split(' ')[1]}")
+            print(f"recieved DECIDE from N{data.split(' ')[1]}")
             new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
             blockchain.add_block(new_block)
             blog.add_post(data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
@@ -159,6 +172,7 @@ def listen(conn, addr):
 
 def get_connections():
     """receive incoming connections and spawn a new thread to handle each connection"""
+    counter = 0
     while True:
         try:
             conn, addr = in_sock.accept()
@@ -166,6 +180,10 @@ def get_connections():
             print("exception in accept", flush=True)
             break
         print("connected to inbound client", flush=True)
+
+        counter += 1 
+        if counter == 2: # Chris: Update This to 4 for Final Testing
+            print("all clients connected", flush=True)
         threading.Thread(target=listen, args=(conn, addr)).start()
 
 # --------------------------------------------------------------------------------------------------
