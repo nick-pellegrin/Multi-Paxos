@@ -13,6 +13,8 @@ import math
 # dictionary[1] = "conn1"
 # dictionary[2] = "conn2"
 # dictionary[3] = "conn3"
+# n =  math.ceil((len(dictionary) + 1)/2)
+# print(n)
 
 # print(dictionary)
 # for key,value in dictionary.items():
@@ -26,9 +28,15 @@ import math
 
 # print(dictionary)
 
-for i in range(1,4):
-    print(i)
+# for i in range(1,4):
+#     print(i)
 
-n = 4/2
-print(n)
-print(math.ceil(n))
+# n = 4/2
+# print(n)
+# print(math.ceil(n))
+
+lines = open("N2_blockchain_log.txt", 'r').readlines()
+for line in lines:
+    line = line[:-1]
+    print(line)
+

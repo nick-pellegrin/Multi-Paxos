@@ -13,22 +13,18 @@ import math
 
 """
 TODO:
-    - implement the comment feature 
-        - already added get_postexists() to blockchain to check if post exists
-        - coments should still be added to blockchain
-    - implement timeout election process if leader fails to respond
-    - implement prepare rejection if leader already exists
+    - implement timeout + re-election process (if needed)
+    - implement prepare rejection if leader already exists and isn't down
         - possible edge case if leader fails and initiates election proceess upon restart
         - all nodes should change leader_id back to None after leader timeout
     - implplement fail link and fix link (to simulate partitioning)
-    - implement node restart/reconnection to network
-        - load blockchain and blog from disk
+    - implement copying longest log when loading backup (extra credit)
 
     PRIORITY FOR DEMO (according to project description):
-    - (1) (done) Normal multi paxos operation with replicated log (ie blockchain and blog)
-    - (2) (todo) Crash failure and recovery from disk/reconection to network (todo: load from log)
+    - (1) (done) Normal multi paxos operation with replicated log
+    - (2) (done) Crash failure and recovery from disk/reconection to network
     - (3) (todo) Fail link and fix link (to simulate partitioning) (nothing completed yet)
-    - (4) (todo) Blog post application (finish comment functionality)
+    - (4) (done) Blog post application (finish comment functionality)
 
 """
 
@@ -48,14 +44,18 @@ def get_user_input():
             for node in out_socks.values():
                 node.sendall(f"RECONNECT {idNum}".encode())
         if user_input == "load":
+            """TODO: check which log is the longest, copy that and load from that 
+            to load operations that were done while the node was crashed"""
             lines = open(blockchain_filename, 'r').readlines()
             for line in lines:
-                line.strip()
+                # line.strip()
+                line = line[:-1] # remove newline character
                 new_block = Block(blockchain.get_latest_block().hash, line.split(" ")[1], line.split(" ")[2], line.split(" ")[3], line.split(" ")[4])
                 blockchain.add_block(new_block)
             lines = open(blog_filename, 'r').readlines()
             for line in lines:
-                line.strip()
+                # line.strip()
+                line = line[:-1] # remove newline character
                 blog.add_post(line.split(" ")[0], line.split(" ")[1], line.split(" ")[2], line.split(" ")[3])
                 
         if user_input.split(" ")[0] == "post" or user_input.split(" ")[0] == "comment": # Chris: we need to implement the comment feature
@@ -66,7 +66,9 @@ def get_user_input():
             # Read Format: read <title>
             if user_input.split(" ")[0] == "comment" and blockchain.get_postexists(user_input.split(" ")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
-            if leader_id == idNum: # act as leader
+            if user_input.split(" ")[0] == "post" and blockchain.get_postexists(user_input.split(" ")[2]) == True:
+                print("DUPLICATE TITLE", flush=True)
+            elif leader_id == idNum: # act as leader
                 QUEUE.append(user_input)
                 new_block = Block(blockchain.get_latest_block().hash, user_input.split(" ")[0], user_input.split(" ")[1], user_input.split(" ")[2], user_input.split(" ")[3])
                 new_block.mine_block(blockchain.difficulty)
@@ -82,11 +84,17 @@ def get_user_input():
             stdout.flush()
             _exit(0)
         if user_input.split(" ")[0] == "failLink":
-            pass
+            out_socks[int(user_input.split(" ")[1])].sendall(f"FAIL {idNum}".encode())
+            del out_socks[int(user_input.split(" ")[1])]
+            print(f"Connection to N{user_input.split(' ')[1]} failed", flush=True)
         if user_input.split(" ")[0] == "fixLink":
-            pass
+            add_outbound_connection(int(user_input.split(" ")[1]))
+            out_socks[int(user_input.split(" ")[1])].sendall(f"FIX {idNum}".encode())
+            print(f"Connection to N{user_input.split(' ')[1]} fixed", flush=True)
         if user_input.split(" ")[0] == "blockchain":
-            print(blockchain.get_chain(), flush=True)
+            chain = blockchain.get_chain()
+            for block in chain:
+                print(block, flush=True)
         if user_input.split(" ")[0] == "queue":
             print(QUEUE, flush=True)
         if user_input.split(" ")[0] == "blog":
@@ -99,7 +107,8 @@ def get_user_input():
                     if counter == 0:
                         counter += 1            # Chris: Added this counter bc it was printing out a 0 for the first title
                         continue
-                    titles.append(block.title)
+                    if block.op == "post":
+                        titles.append(block.title)
                 for title in titles:
                     print(str(title), flush=True)         
         if user_input.split(" ")[0] == "view":
@@ -152,7 +161,7 @@ def handle_msg(data, conn, addr):
         if data.split(" ")[0] == "PROMISE":
             print(f"recieved PROMISE from N{data.split(' ')[1]}")
             promises += 1
-            if promises >= 2:
+            if promises >= math.ceil((len(out_socks) + 1)/2):
                 promises = 0
                 leader_id = idNum
                 op_string = data.split(" ")[2] + " " + data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5]
@@ -172,7 +181,7 @@ def handle_msg(data, conn, addr):
             sleep(0.5) # Chris: Added this bc lines were printing on top of each other
             print(f"recieved ACCEPTED from N{data.split(' ')[1]}")
             accepted += 1
-            if accepted >= 2:
+            if accepted >= math.ceil((len(out_socks) + 1)/2):
                 accepted = 0
                 new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
                 blockchain.add_block(new_block)
@@ -182,6 +191,10 @@ def handle_msg(data, conn, addr):
                 with open(blog_filename, "a") as log:
                     log.write(f"{new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
                 QUEUE.pop(0)
+                if data.split(" ")[2] == "post":
+                    print(f"NEW POST: {data.split(' ')[4]} from {data.split(' ')[3]}")
+                if data.split(" ")[2] == "comment":
+                    print(f"NEW COMMENT: on {data.split(' ')[4]} from {data.split(' ')[3]}")
                 for node in out_socks.values():
                     node.sendall(f"DECIDE {idNum} {new_block.op} {new_block.username} {new_block.title} {new_block.content}".encode())
         if data.split(" ")[0] == "DECIDE":
@@ -196,6 +209,10 @@ def handle_msg(data, conn, addr):
             blog.add_post(data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
             with open(blog_filename, "a") as log:
                     log.write(f"{new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
+            if data.split(" ")[2] == "post":
+                print(f"NEW POST: {data.split(' ')[4]} from {data.split(' ')[3]}")
+            if data.split(" ")[2] == "comment":
+                print(f"NEW COMMENT: on {data.split(' ')[4]} from {data.split(' ')[3]}")
         if data.split(" ")[0] == "FORWARD":
             print(f"recieved FORWARD from {data.split(' ')[1]}")
             if leader_id == idNum:
@@ -210,6 +227,12 @@ def handle_msg(data, conn, addr):
         if data.split(" ")[0] == "RECONNECT":
             print(f"reconnecting to N{data.split(' ')[1]}")
             add_outbound_connection(int(data.split(" ")[1]))
+        if data.split(" ")[0] == "FAIL":
+            del out_socks[int(data.split(" ")[1])]
+            print(f"Connection to N{data.split(' ')[1]} failed", flush=True)
+        if data.split(" ")[0] == "FIX":
+            add_outbound_connection(int(data.split(" ")[1]))
+            print(f"Connection to N{data.split(' ')[1]} fixed", flush=True)
     except Exception:
         traceback.print_exc()
 
@@ -221,7 +244,7 @@ def listen(conn, addr):
             data = conn.recv(1024)
         except:
             conn.close()
-            delete_connections()
+            delete_outbound_connections()
             print(f"exception in receiving from {addr[1]}", flush=True)
             break
         if not data:
@@ -248,7 +271,7 @@ def get_connections():
         threading.Thread(target=listen, args=(conn, addr)).start()
 
 
-def delete_connections():
+def delete_outbound_connections():
     """after failed inbound conn, search for corresponding outbound conn and delete it"""
     failed_connections = []
     for id, node in out_socks.items():
@@ -270,6 +293,14 @@ def add_outbound_connection(id):
             # print(f"connected to outbound client N{id}", flush=True)
         except:
             print(f"failed to connect to outbound client N{id}", flush=True)
+
+
+def failLink(dest):
+    pass
+
+
+def fixLink(dest):
+    pass
 
 # --------------------------------------------------------------------------------------------------
 

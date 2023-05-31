@@ -52,8 +52,9 @@ class Blockchain:
     
     def get_chain(self):
         posts = []
-        for block in self.chain:
-            posts.append((block.op, block.username, block.title, block.content, block.previous_hash))
+        for block in self.chain[1:]:
+            # posts.append((block.op, block.username, block.title, block.content, block.previous_hash))
+            posts.append((block.op, block.username, block.title, block.content))
         return posts
     
     def get_userposts(self, username):

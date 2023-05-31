@@ -1,0 +1,4 @@
+CONFIRMED post user1 title1 content1
+CONFIRMED comment user2 title1 content2
+TENATIVE post user1 title1 content1
+CONFIRMED post user2 title2 content2
