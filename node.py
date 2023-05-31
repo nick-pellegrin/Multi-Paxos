@@ -9,6 +9,7 @@ from blockchain import Blockchain
 from blockchain import Block
 from blog import Blog
 import traceback
+import math
 
 """
 TODO:
@@ -19,21 +20,15 @@ TODO:
     - implement prepare rejection if leader already exists
         - possible edge case if leader fails and initiates election proceess upon restart
         - all nodes should change leader_id back to None after leader timeout
-    - implement disk backup
-        - leader writes new block after addition is accepted by acceptors as decided
-        - acceptors write new block after receiving new block from leader as tenative
-        - acceptor confirms new block as decided on disk after receiving decide from leader
-        - after block is decided on disk, write change to blog on disk
-    - implement the crash feature for a node
     - implplement fail link and fix link (to simulate partitioning)
     - implement node restart/reconnection to network
         - load blockchain and blog from disk
 
     PRIORITY FOR DEMO (according to project description):
     - (1) (done) Normal multi paxos operation with replicated log (ie blockchain and blog)
-    - (2) (todo) Crash failure and recovery from disk/reconection to network
-    - (3) (todo) Fail link and fix link (to simulate partitioning)
-    - (4) (todo) Blog post application 
+    - (2) (todo) Crash failure and recovery from disk/reconection to network (finish reconnect and load from log)
+    - (3) (todo) Fail link and fix link (to simulate partitioning) (nothing completed yet)
+    - (4) (todo) Blog post application (finish comment functionality)
 
 """
 
@@ -47,6 +42,9 @@ def get_user_input():
             in_sock.close()
             stdout.flush()
             _exit(0)
+        if user_input == "reconnect":
+            for node in out_socks.values():
+                node.sendall(f"RECONNECT {idNum}".encode())
         if user_input.split(" ")[0] == "post" or user_input.split(" ")[0] == "comment": # Chris: we need to implement the comment feature
             # Post Format: post <username> <title> <content>
             # Comment Format: comment <username> <title> <content>
@@ -65,7 +63,7 @@ def get_user_input():
                 for node in out_socks.values():
                     node.sendall(f"PREPARE {idNum} {blockchain.get_depth()} {user_input}".encode())
             else: # act as acceptor
-                out_socks[leader_id].sendall(f"FORWARD {idNum} {user_input}".encode())
+                out_socks[int(leader_id)].sendall(f"FORWARD {idNum} {user_input}".encode())
         if user_input.split(" ")[0] == "crash":
             in_sock.close()
             stdout.flush()
@@ -116,7 +114,9 @@ def get_user_input():
         
         # FOR TESTING PURPOSES ONLY
         if user_input == "leader":
-            print(leader_id)
+            print(str(leader_id) + "   " + str(type(leader_id)))
+        if user_input == "nodes":
+            print(out_socks.keys())
                 
 
 
@@ -150,7 +150,7 @@ def handle_msg(data, conn, addr):
                     node.sendall(f"ACCEPT {idNum} {blockchain.get_depth()} {new_block.op} {new_block.username} {new_block.title} {new_block.content} {new_block.nonce}".encode())
         if data.split(" ")[0] == "ACCEPT" and int(data.split(" ")[2]) >= blockchain.get_depth():
             print(f"recieved ACCEPT from N{data.split(' ')[1]}")
-            leader_id = data.split(" ")[1]
+            leader_id = int(data.split(" ")[1])
             op_string = data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5] + " " + data.split(" ")[6]
             out_socks[int(data.split(" ")[1])].sendall(f"ACCEPTED {idNum} {op_string}".encode())
             with open(blockchain_filename, "a") as log:
@@ -194,6 +194,9 @@ def handle_msg(data, conn, addr):
                     node.sendall(f"ACCEPT {idNum} {blockchain.get_depth()} {new_block.op} {new_block.username} {new_block.title} {new_block.content} {new_block.nonce}".encode())
             else:
                 out_socks[leader_id].sendall(f"FORWARD {idNum} {op_string}".encode())
+        if data.split(" ")[0] == "RECONNECT":
+            print(f"reconnecting to N{data.split(' ')[1]}")
+            add_outbound_connection(int(data.split(" ")[1]))
     except Exception:
         traceback.print_exc()
 
@@ -204,6 +207,8 @@ def listen(conn, addr):
         try:
             data = conn.recv(1024)
         except:
+            conn.close()
+            delete_connections()
             print(f"exception in receiving from {addr[1]}", flush=True)
             break
         if not data:
@@ -224,11 +229,34 @@ def get_connections():
             print("exception in accept", flush=True)
             break
         print("connected to inbound client", flush=True)
-
         counter += 1 
         if counter == 2: # Chris: Update This to 4 for Final Testing
             print("all clients connected", flush=True)
         threading.Thread(target=listen, args=(conn, addr)).start()
+
+
+def delete_connections():
+    """after failed inbound conn, search for corresponding outbound conn and delete it"""
+    failed_connections = []
+    for id, node in out_socks.items():
+        try:
+            node.sendall("PING".encode())
+        except:
+            failed_connections.append(id)
+    for id in failed_connections:
+        del out_socks[id]
+
+
+def add_outbound_connection(id):
+    """add a new outbound connection to node with id"""
+    if id not in out_socks:
+        try:
+            out_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            out_sock.connect((IP, 9000 + id))
+            out_socks[id] = out_sock
+            # print(f"connected to outbound client N{id}", flush=True)
+        except:
+            print(f"failed to connect to outbound client N{id}", flush=True)
 
 # --------------------------------------------------------------------------------------------------
 
@@ -261,28 +289,34 @@ if __name__ == "__main__":
 
     # create outbound socket objects to connect to other nodes
     sleep(8)
-    out_sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    out_sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    out_sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    out_sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # out_sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # out_sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # out_sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # out_sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     if idNum == 1:
-        out_sock1.connect((IP, 9002))
-        out_sock2.connect((IP, 9003))
-        out_socks[2] = out_sock1
-        out_socks[3] = out_sock2
+        add_outbound_connection(2)
+        add_outbound_connection(3)
+        # out_sock1.connect((IP, 9002))
+        # out_sock2.connect((IP, 9003))
+        # out_socks[2] = out_sock1
+        # out_socks[3] = out_sock2
  
     if idNum == 2:
-        out_sock1.connect((IP, 9001))
-        out_sock2.connect((IP, 9003))
-        out_socks[1] = out_sock1
-        out_socks[3] = out_sock2
+        add_outbound_connection(1)
+        add_outbound_connection(3)
+        # out_sock1.connect((IP, 9001))
+        # out_sock2.connect((IP, 9003))
+        # out_socks[1] = out_sock1
+        # out_socks[3] = out_sock2
 
     if idNum == 3:
-        out_sock1.connect((IP, 9001))
-        out_sock2.connect((IP, 9002))
-        out_socks[1] = out_sock1
-        out_socks[2] = out_sock2
+        add_outbound_connection(1)
+        add_outbound_connection(2)
+        # out_sock1.connect((IP, 9001))
+        # out_sock2.connect((IP, 9002))
+        # out_socks[1] = out_sock1
+        # out_socks[2] = out_sock2
 
 
     # if idNum == 1:
