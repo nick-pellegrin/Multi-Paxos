@@ -14,7 +14,7 @@ import math
 """
 TODO:
     - implement the comment feature 
-        - added get_postexists() to blockchain to check if post exists
+        - already added get_postexists() to blockchain to check if post exists
         - coments should still be added to blockchain
     - implement timeout election process if leader fails to respond
     - implement prepare rejection if leader already exists
@@ -26,7 +26,7 @@ TODO:
 
     PRIORITY FOR DEMO (according to project description):
     - (1) (done) Normal multi paxos operation with replicated log (ie blockchain and blog)
-    - (2) (todo) Crash failure and recovery from disk/reconection to network (finish reconnect and load from log)
+    - (2) (todo) Crash failure and recovery from disk/reconection to network (todo: load from log)
     - (3) (todo) Fail link and fix link (to simulate partitioning) (nothing completed yet)
     - (4) (todo) Blog post application (finish comment functionality)
 
@@ -36,6 +36,8 @@ TODO:
 def get_user_input():
     """keep waiting for user inputs"""
     global leader_id
+    blockchain_filename = f"N{idNum}_blockchain_log.txt"
+    blog_filename = f"N{idNum}_blog_log.txt"
     while True:
         user_input = input()
         if user_input == "exit":
@@ -45,6 +47,17 @@ def get_user_input():
         if user_input == "reconnect":
             for node in out_socks.values():
                 node.sendall(f"RECONNECT {idNum}".encode())
+        if user_input == "load":
+            lines = open(blockchain_filename, 'r').readlines()
+            for line in lines:
+                line.strip()
+                new_block = Block(blockchain.get_latest_block().hash, line.split(" ")[1], line.split(" ")[2], line.split(" ")[3], line.split(" ")[4])
+                blockchain.add_block(new_block)
+            lines = open(blog_filename, 'r').readlines()
+            for line in lines:
+                line.strip()
+                blog.add_post(line.split(" ")[0], line.split(" ")[1], line.split(" ")[2], line.split(" ")[3])
+                
         if user_input.split(" ")[0] == "post" or user_input.split(" ")[0] == "comment": # Chris: we need to implement the comment feature
             # Post Format: post <username> <title> <content>
             # Comment Format: comment <username> <title> <content>
