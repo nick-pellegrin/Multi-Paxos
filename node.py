@@ -26,6 +26,12 @@ TODO:
     - (3) (todo) Fail link and fix link (to simulate partitioning) (nothing completed yet)
     - (4) (done) Blog post application (finish comment functionality)
 
+How to use Blog:
+    Post Format: post_<username>_<title>_<content>
+    Comment Format: comment_<username>_<title>_<content>
+    Blog Format: blog
+    View Format: view <username>
+    Read Format: read_<title>
 """
 
 
@@ -58,27 +64,22 @@ def get_user_input():
                 line = line[:-1] # remove newline character
                 blog.add_post(line.split(" ")[0], line.split(" ")[1], line.split(" ")[2], line.split(" ")[3])
                 
-        if user_input.split(" ")[0] == "post" or user_input.split(" ")[0] == "comment": # Chris: we need to implement the comment feature
-            # Post Format: post <username> <title> <content>
-            # Comment Format: comment <username> <title> <content>
-            # Blog Format: blog
-            # View Format: view <username>
-            # Read Format: read <title>
-            if user_input.split(" ")[0] == "comment" and blockchain.get_postexists(user_input.split(" ")[2]) == False:
+        if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": # Chris: we need to implement the comment feature
+            if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
-            if user_input.split(" ")[0] == "post" and blockchain.get_postexists(user_input.split(" ")[2]) == True:
+            if user_input.split("_")[0] == "post" and blockchain.get_postexists(user_input.split("_")[2]) == True:
                 print("DUPLICATE TITLE", flush=True)
             elif leader_id == idNum: # act as leader
                 QUEUE.append(user_input)
-                new_block = Block(blockchain.get_latest_block().hash, user_input.split(" ")[0], user_input.split(" ")[1], user_input.split(" ")[2], user_input.split(" ")[3])
+                new_block = Block(blockchain.get_latest_block().hash, user_input.split("_")[0], user_input.split("_")[1], user_input.split("_")[2], user_input.split("_")[3])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT {idNum} {blockchain.get_depth()} {new_block.op} {new_block.username} {new_block.title} {new_block.content} {new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
             elif leader_id == None: # act as proposer
                 for node in out_socks.values():
-                    node.sendall(f"PREPARE {idNum} {blockchain.get_depth()} {user_input}".encode())
+                    node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}".encode())
             else: # act as acceptor
-                out_socks[int(leader_id)].sendall(f"FORWARD {idNum} {user_input}".encode())
+                out_socks[int(leader_id)].sendall(f"FORWARD_{idNum}_{user_input}".encode())
         if user_input.split(" ")[0] == "crash":
             in_sock.close()
             stdout.flush()
@@ -105,7 +106,7 @@ def get_user_input():
                 counter = 0
                 for block in blockchain.chain:
                     if counter == 0:
-                        counter += 1            # Chris: Added this counter bc it was printing out a 0 for the first title
+                        counter += 1            
                         continue
                     if block.op == "post":
                         titles.append(block.title)
@@ -122,8 +123,8 @@ def get_user_input():
             else:
                 for post in content:
                     print(str(post[0]) + ": " + str(post[1]), flush=True)
-        if user_input.split(" ")[0] == "read":
-            this_title = user_input.split(" ")[1]
+        if user_input.split("_")[0] == "read":
+            this_title = user_input.split("_")[1]
             content = []
             for block in blockchain.chain:
                 if block.title == this_title:
@@ -154,76 +155,77 @@ def handle_msg(data, conn, addr):
     sleep(3) 
     data = data.decode()
     try:
-        if data.split(" ")[0] == "PREPARE" and int(data.split(" ")[2]) >= blockchain.get_depth():
-            print(f"recieved PREPARE from N{data.split(' ')[1]}")
-            op_string = data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5] + " " + data.split(" ")[6]
-            out_socks[int(data.split(" ")[1])].sendall(f"PROMISE {idNum} {op_string}".encode())
-        if data.split(" ")[0] == "PROMISE":
-            print(f"recieved PROMISE from N{data.split(' ')[1]}")
+        if data.split("_")[0] == "PREPARE" and int(data.split("_")[2]) >= blockchain.get_depth():
+            print(f"recieved PREPARE from N{data.split('_')[1]}")
+            op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
+            out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}".encode())
+        if data.split("_")[0] == "PROMISE":
+            sleep(0.5) # Chris: Added this bc lines were printing on top of each other
+            print(f"recieved PROMISE from N{data.split('_')[1]}")
             promises += 1
             if promises >= math.ceil((len(out_socks) + 1)/2):
                 promises = 0
                 leader_id = idNum
-                op_string = data.split(" ")[2] + " " + data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5]
+                op_string = data.split("_")[2] + "_" + data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5]
                 QUEUE.append(op_string)
-                new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+                new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT {idNum} {blockchain.get_depth()} {new_block.op} {new_block.username} {new_block.title} {new_block.content} {new_block.nonce}".encode())
-        if data.split(" ")[0] == "ACCEPT" and int(data.split(" ")[2]) >= blockchain.get_depth():
-            print(f"recieved ACCEPT from N{data.split(' ')[1]}")
-            leader_id = int(data.split(" ")[1])
-            op_string = data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5] + " " + data.split(" ")[6]
-            out_socks[int(data.split(" ")[1])].sendall(f"ACCEPTED {idNum} {op_string}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+        if data.split("_")[0] == "ACCEPT" and int(data.split("_")[2]) >= blockchain.get_depth():
+            print(f"recieved ACCEPT from N{data.split('_')[1]}")
+            leader_id = int(data.split("_")[1])
+            op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
+            out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
             with open(blockchain_filename, "a") as log:
                     log.write(f"TENATIVE {op_string}\n")
-        if data.split(" ")[0] == "ACCEPTED":
+        if data.split("_")[0] == "ACCEPTED":
             sleep(0.5) # Chris: Added this bc lines were printing on top of each other
-            print(f"recieved ACCEPTED from N{data.split(' ')[1]}")
+            print(f"recieved ACCEPTED from N{data.split('_')[1]}")
             accepted += 1
             if accepted >= math.ceil((len(out_socks) + 1)/2):
                 accepted = 0
-                new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+                new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 blockchain.add_block(new_block)
                 with open(blockchain_filename, "a") as log:
-                    log.write(f"CONFIRMED {new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
-                blog.add_post(data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+                    log.write(f"CONFIRMED_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}\n")
+                blog.add_post(data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 with open(blog_filename, "a") as log:
                     log.write(f"{new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
                 QUEUE.pop(0)
-                if data.split(" ")[2] == "post":
-                    print(f"NEW POST: {data.split(' ')[4]} from {data.split(' ')[3]}")
-                if data.split(" ")[2] == "comment":
-                    print(f"NEW COMMENT: on {data.split(' ')[4]} from {data.split(' ')[3]}")
+                if data.split("_")[2] == "post":
+                    print(f"NEW POST: {data.split('_')[4]} from {data.split('_')[3]}")
+                if data.split("_")[2] == "comment":
+                    print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
                 for node in out_socks.values():
-                    node.sendall(f"DECIDE {idNum} {new_block.op} {new_block.username} {new_block.title} {new_block.content}".encode())
-        if data.split(" ")[0] == "DECIDE":
-            print(f"recieved DECIDE from N{data.split(' ')[1]}")
-            new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+                    node.sendall(f"DECIDE_{idNum}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}".encode())
+        if data.split("_")[0] == "DECIDE":
+            print(f"recieved DECIDE from N{data.split('_')[1]}")
+            new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
             blockchain.add_block(new_block)
             lines = open(blockchain_filename, 'r').readlines()
-            lines[-1] = f"CONFIRMED {new_block.op} {new_block.username} {new_block.title} {new_block.content}\n"
+            lines[-1] = f"CONFIRMED_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}\n"
             out = open(blockchain_filename, 'w')
             out.writelines(lines)
             out.close()
-            blog.add_post(data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+            blog.add_post(data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
             with open(blog_filename, "a") as log:
-                    log.write(f"{new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
-            if data.split(" ")[2] == "post":
-                print(f"NEW POST: {data.split(' ')[4]} from {data.split(' ')[3]}")
-            if data.split(" ")[2] == "comment":
-                print(f"NEW COMMENT: on {data.split(' ')[4]} from {data.split(' ')[3]}")
-        if data.split(" ")[0] == "FORWARD":
-            print(f"recieved FORWARD from {data.split(' ')[1]}")
+                    log.write(f"{new_block.op}{new_block.username} {new_block.title} {new_block.content}\n")
+            if data.split("_")[2] == "post":
+                print(f"NEW POST: {data.split('_')[4]} from {data.split('_')[3]}")
+            if data.split("_")[2] == "comment":
+                print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
+        if data.split("_")[0] == "FORWARD":
+            print(f"recieved FORWARD from {data.split('_')[1]}")
             if leader_id == idNum:
-                op_string = data.split(" ")[2] + " " + data.split(" ")[3] + " " + data.split(" ")[4] + " " + data.split(" ")[5]
+                op_string = data.split("_")[2] + "_" + data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5]
                 QUEUE.append(op_string)
-                new_block = Block(blockchain.get_latest_block().hash, data.split(" ")[2], data.split(" ")[3], data.split(" ")[4], data.split(" ")[5])
+                new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT {idNum} {blockchain.get_depth()} {new_block.op} {new_block.username} {new_block.title} {new_block.content} {new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
             else:
-                out_socks[leader_id].sendall(f"FORWARD {idNum} {op_string}".encode())
+                out_socks[leader_id].sendall(f"FORWARD_{idNum}_{op_string}".encode())
         if data.split(" ")[0] == "RECONNECT":
             print(f"reconnecting to N{data.split(' ')[1]}")
             add_outbound_connection(int(data.split(" ")[1]))
