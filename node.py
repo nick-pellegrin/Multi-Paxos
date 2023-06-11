@@ -17,13 +17,12 @@ TODO:
     - implement prepare rejection if leader already exists and isn't down
         - possible edge case if leader fails and initiates election proceess upon restart
         - all nodes should change leader_id back to None after leader timeout
-    - implplement fail link and fix link (to simulate partitioning)
     - implement copying longest log when loading backup (extra credit)
 
     PRIORITY FOR DEMO (according to project description):
     - (1) (done) Normal multi paxos operation with replicated log
     - (2) (done) Crash failure and recovery from disk/reconection to network
-    - (3) (todo) Fail link and fix link (to simulate partitioning) (nothing completed yet)
+    - (3) (done) Fail link and fix link (to simulate partitioning) (nothing completed yet)
     - (4) (done) Blog post application (finish comment functionality)
 
 """
