@@ -13,18 +13,22 @@ import math
 
 """
 TODO:
-    - implement timeout + re-election process (if needed)
-    - implement prepare rejection if leader already exists and isn't down
-        - possible edge case if leader fails and initiates election proceess upon restart
-        - all nodes should change leader_id back to None after leader timeout
-    - implplement fail link and fix link (to simulate partitioning)
-    - implement copying longest log when loading backup (extra credit)
+                            - implement timeout + re-election process (if needed)
+                            - implement prepare rejection if leader already exists and isn't down
+                                - possible edge case if leader fails and initiates election proceess upon restart
+                                - all nodes should change leader_id back to None after leader timeout
+                            - implement fail link and fix link (to simulate partitioning)
+                            - implement copying longest log when loading backup (extra credit)
 
-    PRIORITY FOR DEMO (according to project description):
-    - (1) (done) Normal multi paxos operation with replicated log
-    - (2) (done) Crash failure and recovery from disk/reconection to network
-    - (3) (todo) Fail link and fix link (to simulate partitioning) (nothing completed yet)
-    - (4) (done) Blog post application (finish comment functionality)
+                            PRIORITY FOR DEMO (according to project description):
+                            - (1) (done) Normal multi paxos operation with replicated log
+                            - (2) (done) Crash failure and recovery from disk/reconection to network
+                            - (3) (todo) Fail link and fix link (to simulate partitioning) (nothing completed yet)
+                            - (4) (done) Blog post application (finish comment functionality)
+
+MORE TODO:
+    - IMPLEMENT NEW ELECTION WHEN LEADER FAILS LINK
+    - IMPLEMENT CONCURRENT POST COMMANDS. HIGHER NUMID WINS
 
 How to use Blog:
     Post Format: post_<username>_<title>_<content>
@@ -79,7 +83,12 @@ def get_user_input():
                 for node in out_socks.values():
                     node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}".encode())
             else: # act as acceptor
-                out_socks[int(leader_id)].sendall(f"FORWARD_{idNum}_{user_input}".encode())
+                try:
+                    out_socks[int(leader_id)].sendall(f"FORWARD_{idNum}_{user_input}".encode())
+                except:
+                    print("No connection to leader. Attempting to become new leader", flush=True)
+                    # START NEW ELECTION
+
         if user_input.split(" ")[0] == "crash":
             in_sock.close()
             stdout.flush()
@@ -160,7 +169,7 @@ def handle_msg(data, conn, addr):
             op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
             out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}".encode())
         if data.split("_")[0] == "PROMISE":
-            sleep(0.5) # Chris: Added this bc lines were printing on top of each other
+            sleep(0.5)
             print(f"recieved PROMISE from N{data.split('_')[1]}")
             promises += 1
             if promises >= math.ceil((len(out_socks) + 1)/2):
@@ -180,7 +189,7 @@ def handle_msg(data, conn, addr):
             with open(blockchain_filename, "a") as log:
                     log.write(f"TENATIVE {op_string}\n")
         if data.split("_")[0] == "ACCEPTED":
-            sleep(0.5) # Chris: Added this bc lines were printing on top of each other
+            sleep(0.5) 
             print(f"recieved ACCEPTED from N{data.split('_')[1]}")
             accepted += 1
             if accepted >= math.ceil((len(out_socks) + 1)/2):
@@ -232,6 +241,8 @@ def handle_msg(data, conn, addr):
         if data.split(" ")[0] == "FAIL":
             del out_socks[int(data.split(" ")[1])]
             print(f"Connection to N{data.split(' ')[1]} failed", flush=True)
+            if int(data.split(" ")[1]) == leader_id:
+                print("Warning: Connection to leader failed!")
         if data.split(" ")[0] == "FIX":
             add_outbound_connection(int(data.split(" ")[1]))
             print(f"Connection to N{data.split(' ')[1]} fixed", flush=True)
