@@ -96,7 +96,12 @@ def get_user_input():
                 print("LOAD COMPLETE", flush=True)
             except:
                 print("LOAD FAILED", flush=True)
-        if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": # Chris: we need to implement the comment feature
+
+            print("Fetching current leader", flush=True)
+            out_socks[1].sendall(f"WHOLEAD {idNum}".encode())
+            print("Sent leader request, now updating leader", flush=True)
+
+        if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": 
             if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
             if user_input.split("_")[0] == "post" and blockchain.get_postexists(user_input.split("_")[2]) == True:
@@ -256,9 +261,11 @@ def handle_msg(data, conn, addr):
                     print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
                 promises, accepted, highestPromiseID = 0, 0, 0
                 for node in out_socks.values():
-                    node.sendall(f"DECIDE_{idNum}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}".encode())
+                    node.sendall(f"DECIDE_{idNum}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{ballotNum}".encode())
         if data.split("_")[0] == "DECIDE":
             print(f"recieved DECIDE from N{data.split('_')[1]}")
+            if (int(data.split("_")[6]) >= ballotNum):
+                ballotNum = int(data.split("_")[6])
             highestPromiseID = 0
             new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
             blockchain.add_block(new_block)
@@ -298,6 +305,14 @@ def handle_msg(data, conn, addr):
         if data.split(" ")[0] == "FIX":
             add_outbound_connection(int(data.split(" ")[1]))
             print(f"Connection to N{data.split(' ')[1]} fixed", flush=True)
+        if data.split(" ")[0] == "WHOLEAD":
+            print("Leader identity requested", flush=True)
+            
+        if data.split(" ")[0] == "LEADER":
+            print("Leader identity received", flush=True)
+            leader_id = int(data.split(" ")[1])
+            print(f"Leader is N{leader_id}", flush=True)
+
     except Exception:
         traceback.print_exc()
 
