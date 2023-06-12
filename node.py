@@ -55,8 +55,6 @@ def get_user_input():
             for node in out_socks.values():
                 node.sendall(f"RECONNECT {idNum}".encode())
         if user_input == "load":
-            """TODO: check which log is the longest, copy that and load from that 
-            to load operations that were done while the node was crashed"""
             bc_log_length = 0
             blog_log_length = 0
             try:
@@ -104,17 +102,18 @@ def get_user_input():
             if user_input.split("_")[0] == "post" and blockchain.get_postexists(user_input.split("_")[2]) == True:
                 print("DUPLICATE TITLE", flush=True)
             elif leader_id == idNum: # act as leader
+                ballotNum += 1
                 QUEUE.append(user_input)
                 new_block = Block(blockchain.get_latest_block().hash, user_input.split("_")[0], user_input.split("_")[1], user_input.split("_")[2], user_input.split("_")[3])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
                 threading.Thread(target=initiate_timeout).start()
             elif leader_id == None: # act as proposer
                 ballotNum += 1
                 highestPromiseID = idNum
                 for node in out_socks.values():
-                    node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}".encode())
+                    node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}_{ballotNum}".encode())
                     sleep(0.2)
                 threading.Thread(target=initiate_timeout).start()
             else: # act as acceptor
@@ -196,7 +195,7 @@ def get_user_input():
 
 def handle_msg(data, conn, addr):
     """simulates network delay then handles received message"""
-    global promises, accepted, leader_id, timeout_continue, ballotNum, highestPromiseID
+    global QUEUE, promises, accepted, leader_id, timeout_continue, ballotNum, highestPromiseID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     sleep(3) 
@@ -222,23 +221,25 @@ def handle_msg(data, conn, addr):
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
                     sleep(0.2)
                 threading.Thread(target=initiate_timeout).start()
         if data.split("_")[0] == "ACCEPT" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved ACCEPT from N{data.split('_')[1]}")
-            leader_id = int(data.split("_")[1])
-            op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
-            out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
-            with open(blockchain_filename, "a") as log:
-                    log.write(f"TENATIVE_{op_string}\n")
+            if (int(data.split("_")[8]) > ballotNum or (int(data.split("_")[8]) == ballotNum and int(data.split("_")[1]) == highestPromiseID)):
+                leader_id = int(data.split("_")[1])
+                op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
+                out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
+                with open(blockchain_filename, "a") as log:
+                        log.write(f"TENATIVE {op_string}\n")
             else:
                 print(f"not replying to ACCEPT from N{data.split('_')[1]}")
         if data.split("_")[0] == "ACCEPTED":
             sleep(0.5) 
             print(f"recieved ACCEPTED from N{data.split('_')[1]}")
-            accepted += 1
-            if accepted >= math.ceil((len(out_socks) + 1)/2):
+            if len(QUEUE) > 0:
+                accepted += 1
+            if (accepted >= math.ceil((len(out_socks) + 1)/2)) and len(QUEUE) > 0:
                 timeout_continue = False
                 accepted = 0
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
@@ -253,15 +254,9 @@ def handle_msg(data, conn, addr):
                     print(f"NEW POST: {data.split('_')[4]} from {data.split('_')[3]}")
                 if data.split("_")[2] == "comment":
                     print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
-                highestPromiseID = 0
+                promises, accepted, highestPromiseID = 0, 0, 0
                 for node in out_socks.values():
                     node.sendall(f"DECIDE_{idNum}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}".encode())
-
-                
-                
-
-
-
         if data.split("_")[0] == "DECIDE":
             print(f"recieved DECIDE from N{data.split('_')[1]}")
             highestPromiseID = 0
