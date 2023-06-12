@@ -41,20 +41,16 @@ class Blockchain:
         new_block.mine_block(self.difficulty)
         self.chain.append(new_block)
 
-    # def get_balance(self, client):
-    #     balance = 10
-    #     for block in self.chain:
-    #         if block.sender == client:
-    #             balance -= block.amount
-    #         if block.receiver == client:
-    #             balance += block.amount
-    #     return balance
+    def empty_chain(self):
+        self.chain.clear()
+        self.chain = [self.create_genesis_block()]
+        self.chain[0].hash = self.chain[0].previous_hash
     
     def get_chain(self):
         posts = []
         for block in self.chain[1:]:
             # posts.append((block.op, block.username, block.title, block.content, block.previous_hash))
-            posts.append((block.op, block.username, block.title, block.content))
+            posts.append((block.op, block.username, block.title, block.content, block.hash))
         return posts
     
     def get_userposts(self, username):

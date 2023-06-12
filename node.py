@@ -10,6 +10,7 @@ from blockchain import Block
 from blog import Blog
 import traceback
 import math
+import os, fnmatch
 
 """
 TODO:
@@ -56,18 +57,47 @@ def get_user_input():
         if user_input == "load":
             """TODO: check which log is the longest, copy that and load from that 
             to load operations that were done while the node was crashed"""
-            lines = open(blockchain_filename, 'r').readlines()
-            for line in lines:
-                # line.strip()
-                line = line[:-1] # remove newline character
-                new_block = Block(blockchain.get_latest_block().hash, line.split(" ")[1], line.split(" ")[2], line.split(" ")[3], line.split(" ")[4])
-                blockchain.add_block(new_block)
-            lines = open(blog_filename, 'r').readlines()
-            for line in lines:
-                # line.strip()
-                line = line[:-1] # remove newline character
-                blog.add_post(line.split(" ")[0], line.split(" ")[1], line.split(" ")[2], line.split(" ")[3])
-                
+            bc_log_length = 0
+            blog_log_length = 0
+            try:
+                lines = open(blockchain_filename, 'r').readlines()
+                bc_log_length = len(lines)
+                lines = open(blog_filename, 'r').readlines()
+                blog_log_length = len(lines)
+            except:
+                print("NO LOGS FOUND", flush=True)
+            print("CHECKING NEIGHBOR LOGS", flush=True)
+            for root, dirs, files in os.walk('.'):
+                for file in fnmatch.filter(files, '*_blockchain_log.txt'):
+                    other_lines = open(file, 'r').readlines()
+                    if len(other_lines) > bc_log_length:
+                        out = open(blockchain_filename, 'w')
+                        out.writelines(other_lines)
+                        out.close()
+            for root, dirs, files in os.walk('.'):
+                for file in fnmatch.filter(files, '*_blog_log.txt'):
+                    other_lines = open(file, 'r').readlines()
+                    if len(other_lines) > blog_log_length:
+                        out = open(blog_filename, 'w')
+                        out.writelines(other_lines)
+                        out.close()
+            try:
+                blockchain.empty_chain()
+                blog.empty_storage()
+                new_lines = open(blockchain_filename, 'r').readlines()
+                for line in new_lines:
+                    # line.strip()
+                    line = line[:-1] # remove newline character
+                    new_block = Block(blockchain.get_latest_block().hash, line.split("_")[1], line.split("_")[2], line.split("_")[3], line.split("_")[4])
+                    blockchain.add_block(new_block)
+                new_lines = open(blog_filename, 'r').readlines()
+                for line in new_lines:
+                    # line.strip()
+                    line = line[:-1] # remove newline character
+                    blog.add_post(line.split("_")[0], line.split("_")[1], line.split("_")[2], line.split("_")[3])
+                print("LOAD COMPLETE", flush=True)
+            except:
+                print("LOAD FAILED", flush=True)
         if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": # Chris: we need to implement the comment feature
             if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
@@ -78,13 +108,15 @@ def get_user_input():
                 new_block = Block(blockchain.get_latest_block().hash, user_input.split("_")[0], user_input.split("_")[1], user_input.split("_")[2], user_input.split("_")[3])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                threading.Thread(target=initiate_timeout).start()
             elif leader_id == None: # act as proposer
                 ballotNum += 1
                 highestPromiseID = idNum
                 for node in out_socks.values():
-                    node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}_{ballotNum}".encode())
+                    node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}".encode())
                     sleep(0.2)
+                threading.Thread(target=initiate_timeout).start()
             else: # act as acceptor
                 try:
                     out_socks[int(leader_id)].sendall(f"FORWARD_{idNum}_{user_input}".encode())
@@ -106,8 +138,11 @@ def get_user_input():
             print(f"Connection to N{user_input.split(' ')[1]} fixed", flush=True)
         if user_input.split(" ")[0] == "blockchain":
             chain = blockchain.get_chain()
-            for block in chain:
-                print(block, flush=True)
+            if len(chain) == 0:
+                print("[]", flush=True)
+            else:
+                for block in chain:
+                    print(block, flush=True)
         if user_input.split(" ")[0] == "queue":
             print(QUEUE, flush=True)
         if user_input.split(" ")[0] == "blog":
@@ -161,7 +196,7 @@ def get_user_input():
 
 def handle_msg(data, conn, addr):
     """simulates network delay then handles received message"""
-    global promises, accepted, leader_id, ballotNum, highestPromiseID
+    global promises, accepted, leader_id, timeout_continue, ballotNum, highestPromiseID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     sleep(3) 
@@ -179,6 +214,7 @@ def handle_msg(data, conn, addr):
             print(f"recieved PROMISE from N{data.split('_')[1]}")
             promises += 1
             if promises >= math.ceil((len(out_socks) + 1)/2):
+                timeout_continue = False
                 promises = 0
                 leader_id = idNum
                 op_string = data.split("_")[2] + "_" + data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5]
@@ -186,24 +222,24 @@ def handle_msg(data, conn, addr):
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
                     sleep(0.2)
+                threading.Thread(target=initiate_timeout).start()
         if data.split("_")[0] == "ACCEPT" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved ACCEPT from N{data.split('_')[1]}")
-            if (int(data.split("_")[8]) > ballotNum or (int(data.split("_")[8]) == ballotNum and int(data.split("_")[1]) == highestPromiseID)):
-                leader_id = int(data.split("_")[1])
-                op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
-                out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
-                with open(blockchain_filename, "a") as log:
-                        log.write(f"TENATIVE {op_string}\n")
+            leader_id = int(data.split("_")[1])
+            op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
+            out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
+            with open(blockchain_filename, "a") as log:
+                    log.write(f"TENATIVE_{op_string}\n")
             else:
                 print(f"not replying to ACCEPT from N{data.split('_')[1]}")
-
         if data.split("_")[0] == "ACCEPTED":
             sleep(0.5) 
             print(f"recieved ACCEPTED from N{data.split('_')[1]}")
             accepted += 1
             if accepted >= math.ceil((len(out_socks) + 1)/2):
+                timeout_continue = False
                 accepted = 0
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 blockchain.add_block(new_block)
@@ -211,7 +247,7 @@ def handle_msg(data, conn, addr):
                     log.write(f"CONFIRMED_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}\n")
                 blog.add_post(data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 with open(blog_filename, "a") as log:
-                    log.write(f"{new_block.op} {new_block.username} {new_block.title} {new_block.content}\n")
+                    log.write(f"{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}\n")
                 QUEUE.pop(0)
                 if data.split("_")[2] == "post":
                     print(f"NEW POST: {data.split('_')[4]} from {data.split('_')[3]}")
@@ -220,6 +256,12 @@ def handle_msg(data, conn, addr):
                 highestPromiseID = 0
                 for node in out_socks.values():
                     node.sendall(f"DECIDE_{idNum}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}".encode())
+
+                
+                
+
+
+
         if data.split("_")[0] == "DECIDE":
             print(f"recieved DECIDE from N{data.split('_')[1]}")
             highestPromiseID = 0
@@ -232,7 +274,7 @@ def handle_msg(data, conn, addr):
             out.close()
             blog.add_post(data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
             with open(blog_filename, "a") as log:
-                    log.write(f"{new_block.op}{new_block.username} {new_block.title} {new_block.content}\n")
+                    log.write(f"{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}\n")
             if data.split("_")[2] == "post":
                 print(f"NEW POST: {data.split('_')[4]} from {data.split('_')[3]}")
             if data.split("_")[2] == "comment":
@@ -322,12 +364,20 @@ def add_outbound_connection(id):
             print(f"failed to connect to outbound client N{id}", flush=True)
 
 
-def failLink(dest):
-    pass
+def initiate_timeout():
+    global timeout_continue
+    timeout_count = 0
+    for i in range(10):
+        sleep(1)
+        timeout_count += 1
+        if timeout_continue == False:
+            timeout_continue = True
+            break
+    if timeout_count == 10:
+        print("TIMEOUT")
+    
 
 
-def fixLink(dest):
-    pass
 
 # --------------------------------------------------------------------------------------------------
 
@@ -352,6 +402,7 @@ if __name__ == "__main__":
     IP = socket.gethostname()
     PORT = 9000 + idNum
     QUEUE = []
+    timeout_continue = True
 
     # create an inbound socket object to listen for incoming connections
     in_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
