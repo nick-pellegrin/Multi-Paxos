@@ -97,10 +97,6 @@ def get_user_input():
             except:
                 print("LOAD FAILED", flush=True)
 
-            print("Fetching current leader", flush=True)
-            out_socks[1].sendall(f"WHOLEAD {idNum}".encode())
-            print("Sent leader request, now updating leader", flush=True)
-
         if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": 
             if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
@@ -124,9 +120,11 @@ def get_user_input():
             else: # act as acceptor
                 try:
                     out_socks[int(leader_id)].sendall(f"FORWARD_{idNum}_{user_input}".encode())
+                    if threading.Thread(target=initiate_timeout).start() == "timeout":
+                        leader_id = None
                 except:
-                    print("No connection to leader. Attempting to become new leader", flush=True)
-                    # START NEW ELECTION
+                    print("No connection to leader. Attempting to become new leader: post again", flush=True)
+                    leader_id = None
 
         if user_input.split(" ")[0] == "crash":
             in_sock.close()
@@ -191,6 +189,8 @@ def get_user_input():
             print(str(leader_id) + "   " + str(type(leader_id)))
         if user_input == "nodes":
             print(out_socks.keys())
+        if user_input == "ballot":
+            print(ballotNum)
                 
 
 
@@ -208,12 +208,23 @@ def handle_msg(data, conn, addr):
     try:
         if data.split("_")[0] == "PREPARE" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved PREPARE from N{data.split('_')[1]}")
-            if (ballotNum < int(data.split("_")[7])):
+
+            op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
+            
+            if leader_id == None:
+                out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}_{ballotNum}".encode())
+
+            elif (ballotNum < int(data.split("_")[7])):
                 ballotNum = int(data.split("_")[7])
+                out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}_{ballotNum}".encode())
+
+            elif (ballotNum == int(data.split("_")[7])):
+                if leader_id != None:
+                    if data.split("_")[1] >= leader_id:
+                        out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}_{ballotNum}".encode())
             if (int(data.split('_')[1]) >= highestPromiseID):
                 highestPromiseID = int(data.split('_')[1])
-            op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
-            out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}_{ballotNum}".encode())
+
         if data.split("_")[0] == "PROMISE":
             print(f"recieved PROMISE from N{data.split('_')[1]}")
             promises += 1
@@ -231,6 +242,7 @@ def handle_msg(data, conn, addr):
                 threading.Thread(target=initiate_timeout).start()
         if data.split("_")[0] == "ACCEPT" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved ACCEPT from N{data.split('_')[1]}")
+            timeout_continue = False
             if (int(data.split("_")[8]) > ballotNum or (int(data.split("_")[8]) == ballotNum and int(data.split("_")[1]) == highestPromiseID)):
                 leader_id = int(data.split("_")[1])
                 op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
@@ -305,13 +317,6 @@ def handle_msg(data, conn, addr):
         if data.split(" ")[0] == "FIX":
             add_outbound_connection(int(data.split(" ")[1]))
             print(f"Connection to N{data.split(' ')[1]} fixed", flush=True)
-        if data.split(" ")[0] == "WHOLEAD":
-            print("Leader identity requested", flush=True)
-            
-        if data.split(" ")[0] == "LEADER":
-            print("Leader identity received", flush=True)
-            leader_id = int(data.split(" ")[1])
-            print(f"Leader is N{leader_id}", flush=True)
 
     except Exception:
         traceback.print_exc()
@@ -385,6 +390,10 @@ def initiate_timeout():
             break
     if timeout_count == 10:
         print("TIMEOUT")
+        leader_id = None
+        return("timeout")
+    return("no timeout")
+    
     
 
 
