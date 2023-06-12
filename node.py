@@ -41,7 +41,7 @@ How to use Blog:
 
 def get_user_input():
     """keep waiting for user inputs"""
-    global leader_id, ballotNum, lastAcceptedID
+    global leader_id, ballotNum, highestPromiseID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     while True:
@@ -69,8 +69,6 @@ def get_user_input():
                 blog.add_post(line.split(" ")[0], line.split(" ")[1], line.split(" ")[2], line.split(" ")[3])
                 
         if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": # Chris: we need to implement the comment feature
-            ballotNum += 1
-            lastAcceptedID = idNum
             if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
             if user_input.split("_")[0] == "post" and blockchain.get_postexists(user_input.split("_")[2]) == True:
@@ -82,6 +80,8 @@ def get_user_input():
                 for node in out_socks.values():
                     node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
             elif leader_id == None: # act as proposer
+                ballotNum += 1
+                highestPromiseID = idNum
                 for node in out_socks.values():
                     node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}_{ballotNum}".encode())
                     sleep(0.2)
@@ -161,7 +161,7 @@ def get_user_input():
 
 def handle_msg(data, conn, addr):
     """simulates network delay then handles received message"""
-    global promises, accepted, leader_id, ballotNum, lastAcceptedID
+    global promises, accepted, leader_id, ballotNum, highestPromiseID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     sleep(3) 
@@ -171,9 +171,10 @@ def handle_msg(data, conn, addr):
             print(f"recieved PREPARE from N{data.split('_')[1]}")
             if (ballotNum < int(data.split("_")[7])):
                 ballotNum = int(data.split("_")[7])
+            if (int(data.split('_')[1]) >= highestPromiseID):
+                highestPromiseID = int(data.split('_')[1])
             op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
             out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}_{ballotNum}".encode())
-            print("my ballotNum is now " + str(ballotNum))
         if data.split("_")[0] == "PROMISE":
             print(f"recieved PROMISE from N{data.split('_')[1]}")
             promises += 1
@@ -189,8 +190,7 @@ def handle_msg(data, conn, addr):
                     sleep(0.2)
         if data.split("_")[0] == "ACCEPT" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved ACCEPT from N{data.split('_')[1]}")
-            if (int(data.split("_")[8]) > ballotNum or (int(data.split("_")[8]) == ballotNum and int(data.split("_")[1]) > lastAcceptedID)):
-                lastAcceptedID = int(data.split("_")[1])
+            if (int(data.split("_")[8]) > ballotNum or (int(data.split("_")[8]) == ballotNum and int(data.split("_")[1]) == highestPromiseID)):
                 leader_id = int(data.split("_")[1])
                 op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
                 out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
@@ -217,10 +217,12 @@ def handle_msg(data, conn, addr):
                     print(f"NEW POST: {data.split('_')[4]} from {data.split('_')[3]}")
                 if data.split("_")[2] == "comment":
                     print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
+                highestPromiseID = 0
                 for node in out_socks.values():
                     node.sendall(f"DECIDE_{idNum}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}".encode())
         if data.split("_")[0] == "DECIDE":
             print(f"recieved DECIDE from N{data.split('_')[1]}")
+            highestPromiseID = 0
             new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
             blockchain.add_block(new_block)
             lines = open(blockchain_filename, 'r').readlines()
@@ -243,9 +245,9 @@ def handle_msg(data, conn, addr):
                 QUEUE.append(op_string)
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
-                print("sending ballotNum of: " + str(ballotNum))
                 for node in out_socks.values():
                     node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
+                    sleep(0.2)
             else:
                 out_socks[leader_id].sendall(f"FORWARD_{idNum}_{op_string}".encode())
         if data.split(" ")[0] == "RECONNECT":
@@ -287,13 +289,12 @@ def get_connections():
     while True:
         try:
             conn, addr = in_sock.accept()
-            counter += 1
         except:
             print("exception in accept", flush=True)
             break
         print("connected to inbound client", flush=True)
         counter += 1 
-        if counter == 2: # Chris: Update This to 4 for Final Testing
+        if counter == 4: # Chris: Update This to 4 for Final Testing
             print("all clients connected", flush=True)
         threading.Thread(target=listen, args=(conn, addr)).start()
 
@@ -317,7 +318,6 @@ def add_outbound_connection(id):
             out_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             out_sock.connect((IP, 9000 + id))
             out_socks[id] = out_sock
-            # print(f"connected to outbound client N{id}", flush=True)
         except:
             print(f"failed to connect to outbound client N{id}", flush=True)
 
@@ -348,11 +348,10 @@ if __name__ == "__main__":
     promises = 0
     accepted = 0
     ballotNum = 0
-    lastAcceptedID = 0
+    highestPromiseID = 0
     IP = socket.gethostname()
     PORT = 9000 + idNum
     QUEUE = []
-    IDS = {}
 
     # create an inbound socket object to listen for incoming connections
     in_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -363,83 +362,38 @@ if __name__ == "__main__":
 
     # create outbound socket objects to connect to other nodes
     sleep(8)
-    # out_sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # out_sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # out_sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # out_sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     if idNum == 1:
         add_outbound_connection(2)
         add_outbound_connection(3)
-        # out_sock1.connect((IP, 9002))
-        # out_sock2.connect((IP, 9003))
-        # out_socks[2] = out_sock1
-        # out_socks[3] = out_sock2
+        add_outbound_connection(4)
+        add_outbound_connection(5)
  
     if idNum == 2:
         add_outbound_connection(1)
         add_outbound_connection(3)
-        # out_sock1.connect((IP, 9001))
-        # out_sock2.connect((IP, 9003))
-        # out_socks[1] = out_sock1
-        # out_socks[3] = out_sock2
+        add_outbound_connection(4)
+        add_outbound_connection(5)
+
 
     if idNum == 3:
         add_outbound_connection(1)
         add_outbound_connection(2)
-        # out_sock1.connect((IP, 9001))
-        # out_sock2.connect((IP, 9002))
-        # out_socks[1] = out_sock1
-        # out_socks[2] = out_sock2
+        add_outbound_connection(4)
+        add_outbound_connection(5)
 
-    # -------------------------------------------------------------------------------------
-    # --------------------------- CODE BELOW IS FOR 5 NODES -------------------------------
 
-    # if idNum == 1:
-    #     out_sock1.connect((IP, 9002))
-    #     out_sock2.connect((IP, 9003))
-    #     out_sock3.connect((IP, 9004))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[2] = out_sock1
-    #     out_socks[3] = out_sock2
-    #     out_socks[4] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 2:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9003))
-    #     out_sock3.connect((IP, 9004))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[1] = out_sock1
-    #     out_socks[3] = out_sock2
-    #     out_socks[4] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 3:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9002))
-    #     out_sock3.connect((IP, 9004))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[1] = out_sock1
-    #     out_socks[2] = out_sock2
-    #     out_socks[4] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 4:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9002))
-    #     out_sock3.connect((IP, 9003))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[1] = out_sock1
-    #     out_socks[2] = out_sock2
-    #     out_socks[3] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 5:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9002))
-    #     out_sock3.connect((IP, 9003))
-    #     out_sock4.connect((IP, 9004))
-    #     out_socks[1] = out_sock1
-    #     out_socks[2] = out_sock2
-    #     out_socks[3] = out_sock3
-    #     out_socks[4] = out_sock4
+    if idNum == 4:
+        add_outbound_connection(1)
+        add_outbound_connection(2)
+        add_outbound_connection(3)
+        add_outbound_connection(5)
+
+    if idNum == 5:
+        add_outbound_connection(1)
+        add_outbound_connection(2)
+        add_outbound_connection(3)
+        add_outbound_connection(4)
 
     
     # spawn a new thread to wait for user input
