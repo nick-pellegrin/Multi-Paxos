@@ -184,8 +184,6 @@ def get_user_input():
             print(str(leader_id) + "   " + str(type(leader_id)))
         if user_input == "nodes":
             print(out_socks.keys())
-        if user_input == "queue":
-            print(QUEUE)
                 
 
 
@@ -401,81 +399,38 @@ if __name__ == "__main__":
 
     # create outbound socket objects to connect to other nodes
     sleep(8)
-    # out_sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # out_sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # out_sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # out_sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     if idNum == 1:
         add_outbound_connection(2)
         add_outbound_connection(3)
-        # out_sock1.connect((IP, 9002))
-        # out_sock2.connect((IP, 9003))
-        # out_socks[2] = out_sock1
-        # out_socks[3] = out_sock2
+        add_outbound_connection(4)
+        add_outbound_connection(5)
  
     if idNum == 2:
         add_outbound_connection(1)
         add_outbound_connection(3)
-        # out_sock1.connect((IP, 9001))
-        # out_sock2.connect((IP, 9003))
-        # out_socks[1] = out_sock1
-        # out_socks[3] = out_sock2
+        add_outbound_connection(4)
+        add_outbound_connection(5)
+
 
     if idNum == 3:
         add_outbound_connection(1)
         add_outbound_connection(2)
-        # out_sock1.connect((IP, 9001))
-        # out_sock2.connect((IP, 9002))
-        # out_socks[1] = out_sock1
-        # out_socks[2] = out_sock2
+        add_outbound_connection(4)
+        add_outbound_connection(5)
 
 
-    # if idNum == 1:
-    #     out_sock1.connect((IP, 9002))
-    #     out_sock2.connect((IP, 9003))
-    #     out_sock3.connect((IP, 9004))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[2] = out_sock1
-    #     out_socks[3] = out_sock2
-    #     out_socks[4] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 2:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9003))
-    #     out_sock3.connect((IP, 9004))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[1] = out_sock1
-    #     out_socks[3] = out_sock2
-    #     out_socks[4] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 3:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9002))
-    #     out_sock3.connect((IP, 9004))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[1] = out_sock1
-    #     out_socks[2] = out_sock2
-    #     out_socks[4] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 4:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9002))
-    #     out_sock3.connect((IP, 9003))
-    #     out_sock4.connect((IP, 9005))
-    #     out_socks[1] = out_sock1
-    #     out_socks[2] = out_sock2
-    #     out_socks[3] = out_sock3
-    #     out_socks[5] = out_sock4
-    # if idNum == 5:
-    #     out_sock1.connect((IP, 9001))
-    #     out_sock2.connect((IP, 9002))
-    #     out_sock3.connect((IP, 9003))
-    #     out_sock4.connect((IP, 9004))
-    #     out_socks[1] = out_sock1
-    #     out_socks[2] = out_sock2
-    #     out_socks[3] = out_sock3
-    #     out_socks[4] = out_sock4
+    if idNum == 4:
+        add_outbound_connection(1)
+        add_outbound_connection(2)
+        add_outbound_connection(3)
+        add_outbound_connection(5)
+
+    if idNum == 5:
+        add_outbound_connection(1)
+        add_outbound_connection(2)
+        add_outbound_connection(3)
+        add_outbound_connection(4)
 
     
     # spawn a new thread to wait for user input
