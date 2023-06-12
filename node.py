@@ -57,26 +57,45 @@ def get_user_input():
         if user_input == "load":
             """TODO: check which log is the longest, copy that and load from that 
             to load operations that were done while the node was crashed"""
-            lines = open(blockchain_filename, 'r').readlines()
+            bc_log_length = 0
+            blog_log_length = 0
+            try:
+                lines = open(blockchain_filename, 'r').readlines()
+                bc_log_length = len(lines)
+                lines = open(blog_filename, 'r').readlines()
+                blog_log_length = len(lines)
+            except:
+                print("NO LOGS FOUND", flush=True)
+            print("CHECKING NEIGHBOR LOGS", flush=True)
             for root, dirs, files in os.walk('.'):
-                for file in fnmatch.filter(files, '*.txt'):
+                for file in fnmatch.filter(files, '*_blockchain_log.txt'):
                     other_lines = open(file, 'r').readlines()
-                    if len(other_lines) > len(lines):
+                    if len(other_lines) > bc_log_length:
                         out = open(blockchain_filename, 'w')
                         out.writelines(other_lines)
                         out.close()
-            lines = open(blockchain_filename, 'r').readlines()
-            for line in lines:
-                # line.strip()
-                line = line[:-1] # remove newline character
-                new_block = Block(blockchain.get_latest_block().hash, line.split("_")[1], line.split("_")[2], line.split("_")[3], line.split("_")[4])
-                blockchain.add_block(new_block)
-            lines = open(blog_filename, 'r').readlines()
-            for line in lines:
-                # line.strip()
-                line = line[:-1] # remove newline character
-                blog.add_post(line.split("_")[0], line.split("_")[1], line.split("_")[2], line.split("_")[3])
-                
+            for root, dirs, files in os.walk('.'):
+                for file in fnmatch.filter(files, '*_blog_log.txt'):
+                    other_lines = open(file, 'r').readlines()
+                    if len(other_lines) > blog_log_length:
+                        out = open(blog_filename, 'w')
+                        out.writelines(other_lines)
+                        out.close()
+            try:
+                new_lines = open(blockchain_filename, 'r').readlines()
+                for line in new_lines:
+                    # line.strip()
+                    line = line[:-1] # remove newline character
+                    new_block = Block(blockchain.get_latest_block().hash, line.split("_")[1], line.split("_")[2], line.split("_")[3], line.split("_")[4])
+                    blockchain.add_block(new_block)
+                new_lines = open(blog_filename, 'r').readlines()
+                for line in new_lines:
+                    # line.strip()
+                    line = line[:-1] # remove newline character
+                    blog.add_post(line.split("_")[0], line.split("_")[1], line.split("_")[2], line.split("_")[3])
+                print("LOAD COMPLETE", flush=True)
+            except:
+                print("LOAD FAILED", flush=True)
         if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": # Chris: we need to implement the comment feature
             if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
