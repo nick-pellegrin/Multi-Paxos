@@ -287,6 +287,7 @@ def get_connections():
     while True:
         try:
             conn, addr = in_sock.accept()
+            counter += 1
         except:
             print("exception in accept", flush=True)
             break
@@ -351,6 +352,7 @@ if __name__ == "__main__":
     IP = socket.gethostname()
     PORT = 9000 + idNum
     QUEUE = []
+    IDS = {}
 
     # create an inbound socket object to listen for incoming connections
     in_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -390,6 +392,8 @@ if __name__ == "__main__":
         # out_socks[1] = out_sock1
         # out_socks[2] = out_sock2
 
+    # -------------------------------------------------------------------------------------
+    # --------------------------- CODE BELOW IS FOR 5 NODES -------------------------------
 
     # if idNum == 1:
     #     out_sock1.connect((IP, 9002))
