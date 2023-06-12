@@ -57,6 +57,8 @@ def get_user_input():
         if user_input == "load":
             """TODO: check which log is the longest, copy that and load from that 
             to load operations that were done while the node was crashed"""
+            blockchain = Blockchain()
+            blog = Blog()
             bc_log_length = 0
             blog_log_length = 0
             try:
@@ -338,13 +340,6 @@ def add_outbound_connection(id):
         except:
             print(f"failed to connect to outbound client N{id}", flush=True)
 
-
-def failLink(dest):
-    pass
-
-
-def fixLink(dest):
-    pass
 
 # --------------------------------------------------------------------------------------------------
 
