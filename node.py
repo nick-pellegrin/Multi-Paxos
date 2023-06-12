@@ -42,7 +42,7 @@ How to use Blog:
 
 def get_user_input():
     """keep waiting for user inputs"""
-    global leader_id
+    global leader_id, ballotNum, highestPromiseID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     while True:
@@ -111,8 +111,11 @@ def get_user_input():
                     node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
                 threading.Thread(target=initiate_timeout).start()
             elif leader_id == None: # act as proposer
+                ballotNum += 1
+                highestPromiseID = idNum
                 for node in out_socks.values():
                     node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}".encode())
+                    sleep(0.2)
                 threading.Thread(target=initiate_timeout).start()
             else: # act as acceptor
                 try:
@@ -193,7 +196,7 @@ def get_user_input():
 
 def handle_msg(data, conn, addr):
     """simulates network delay then handles received message"""
-    global promises, accepted, leader_id, timeout_continue
+    global promises, accepted, leader_id, timeout_continue, ballotNum, highestPromiseID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     sleep(3) 
@@ -201,10 +204,13 @@ def handle_msg(data, conn, addr):
     try:
         if data.split("_")[0] == "PREPARE" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved PREPARE from N{data.split('_')[1]}")
+            if (ballotNum < int(data.split("_")[7])):
+                ballotNum = int(data.split("_")[7])
+            if (int(data.split('_')[1]) >= highestPromiseID):
+                highestPromiseID = int(data.split('_')[1])
             op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
-            out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}".encode())
+            out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}_{ballotNum}".encode())
         if data.split("_")[0] == "PROMISE":
-            sleep(0.5)
             print(f"recieved PROMISE from N{data.split('_')[1]}")
             promises += 1
             if promises >= math.ceil((len(out_socks) + 1)/2):
@@ -217,6 +223,7 @@ def handle_msg(data, conn, addr):
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
                     node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                    sleep(0.2)
                 threading.Thread(target=initiate_timeout).start()
         if data.split("_")[0] == "ACCEPT" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved ACCEPT from N{data.split('_')[1]}")
@@ -225,6 +232,8 @@ def handle_msg(data, conn, addr):
             out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
             with open(blockchain_filename, "a") as log:
                     log.write(f"TENATIVE_{op_string}\n")
+            else:
+                print(f"not replying to ACCEPT from N{data.split('_')[1]}")
         if data.split("_")[0] == "ACCEPTED":
             sleep(0.5) 
             print(f"recieved ACCEPTED from N{data.split('_')[1]}")
@@ -244,6 +253,7 @@ def handle_msg(data, conn, addr):
                     print(f"NEW POST: {data.split('_')[4]} from {data.split('_')[3]}")
                 if data.split("_")[2] == "comment":
                     print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
+                highestPromiseID = 0
                 for node in out_socks.values():
                     node.sendall(f"DECIDE_{idNum}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}".encode())
 
@@ -254,6 +264,7 @@ def handle_msg(data, conn, addr):
 
         if data.split("_")[0] == "DECIDE":
             print(f"recieved DECIDE from N{data.split('_')[1]}")
+            highestPromiseID = 0
             new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
             blockchain.add_block(new_block)
             lines = open(blockchain_filename, 'r').readlines()
@@ -270,13 +281,15 @@ def handle_msg(data, conn, addr):
                 print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
         if data.split("_")[0] == "FORWARD":
             print(f"recieved FORWARD from {data.split('_')[1]}")
+            ballotNum += 1
             if leader_id == idNum:
                 op_string = data.split("_")[2] + "_" + data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5]
                 QUEUE.append(op_string)
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
+                    sleep(0.2)
             else:
                 out_socks[leader_id].sendall(f"FORWARD_{idNum}_{op_string}".encode())
         if data.split(" ")[0] == "RECONNECT":
@@ -323,7 +336,7 @@ def get_connections():
             break
         print("connected to inbound client", flush=True)
         counter += 1 
-        if counter == 2: # Chris: Update This to 4 for Final Testing
+        if counter == 4: # Chris: Update This to 4 for Final Testing
             print("all clients connected", flush=True)
         threading.Thread(target=listen, args=(conn, addr)).start()
 
@@ -347,7 +360,6 @@ def add_outbound_connection(id):
             out_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             out_sock.connect((IP, 9000 + id))
             out_socks[id] = out_sock
-            # print(f"connected to outbound client N{id}", flush=True)
         except:
             print(f"failed to connect to outbound client N{id}", flush=True)
 
@@ -385,6 +397,8 @@ if __name__ == "__main__":
     leader_id = None
     promises = 0
     accepted = 0
+    ballotNum = 0
+    highestPromiseID = 0
     IP = socket.gethostname()
     PORT = 9000 + idNum
     QUEUE = []
