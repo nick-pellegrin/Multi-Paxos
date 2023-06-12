@@ -14,3 +14,6 @@ class Blog:
         if username not in self.storage:
             self.storage[username] = []
         self.storage[username].append((op, title, content))
+    
+    def empty_storage(self):
+        self.storage.clear()
