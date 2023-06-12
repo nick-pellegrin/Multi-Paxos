@@ -28,7 +28,7 @@ class Blockchain:
     def __init__(self):
         self.chain = [self.create_genesis_block()]
         self.chain[0].hash = self.chain[0].previous_hash
-        self.difficulty = 1
+        self.difficulty = 3
 
     def create_genesis_block(self):
         return Block("0" * 64, "genesis_sender", "genesis_receiver", 0, 0)
@@ -52,8 +52,9 @@ class Blockchain:
     
     def get_chain(self):
         posts = []
-        for block in self.chain:
-            posts.append((block.op, block.username, block.title, block.content, block.previous_hash))
+        for block in self.chain[1:]:
+            # posts.append((block.op, block.username, block.title, block.content, block.previous_hash))
+            posts.append((block.op, block.username, block.title, block.content))
         return posts
     
     def get_userposts(self, username):
@@ -72,4 +73,13 @@ class Blockchain:
             if block.title == title and block.op == "coment":
                 posts.append((block.username, block.content))
         return posts
+    
+    def get_depth(self):
+        return len(self.chain)
+    
+    def get_postexists(self, title):
+        for block in self.chain:
+            if block.title == title and block.op == "post":
+                return True
+        return False
     

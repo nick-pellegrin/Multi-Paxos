@@ -10,7 +10,7 @@ class Blog:
         self.storage = {}
 
     # (key, value) = (username, [(op, title, content), (op, title, content), ...])
-    def add_post(self, username, op, title, content):
+    def add_post(self, op, username, title, content):
         if username not in self.storage:
             self.storage[username] = []
         self.storage[username].append((op, title, content))
