@@ -1,4 +1,5 @@
 import sys
+import os, fnmatch
 import math
 
 
@@ -35,8 +36,17 @@ import math
 # print(n)
 # print(math.ceil(n))
 
-lines = open("N2_blockchain_log.txt", 'r').readlines()
-for line in lines:
-    line = line[:-1]
-    print(line)
+# lines = open("N2_blockchain_log.txt", 'r').readlines()
+# for line in lines:
+#     line = line[:-1]
+#     print(line)
 
+# for file in os.listdir():
+#     print(file)
+
+# for file in fnmatch.filter(os.listdir(), '.txt'):
+#     print(file)
+
+for root, dirs, files in os.walk('.'):
+    for file in fnmatch.filter(files, '*.txt'):
+        print(file)
