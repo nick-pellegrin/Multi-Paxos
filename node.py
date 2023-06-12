@@ -41,7 +41,7 @@ How to use Blog:
 
 def get_user_input():
     """keep waiting for user inputs"""
-    global leader_id
+    global leader_id, ballotNum, lastAcceptedID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     while True:
@@ -69,6 +69,8 @@ def get_user_input():
                 blog.add_post(line.split(" ")[0], line.split(" ")[1], line.split(" ")[2], line.split(" ")[3])
                 
         if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": # Chris: we need to implement the comment feature
+            ballotNum += 1
+            lastAcceptedID = idNum
             if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
                 print("POST DOES NOT EXIST", flush=True)
             if user_input.split("_")[0] == "post" and blockchain.get_postexists(user_input.split("_")[2]) == True:
@@ -78,10 +80,11 @@ def get_user_input():
                 new_block = Block(blockchain.get_latest_block().hash, user_input.split("_")[0], user_input.split("_")[1], user_input.split("_")[2], user_input.split("_")[3])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
             elif leader_id == None: # act as proposer
                 for node in out_socks.values():
-                    node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}".encode())
+                    node.sendall(f"PREPARE_{idNum}_{blockchain.get_depth()}_{user_input}_{ballotNum}".encode())
+                    sleep(0.2)
             else: # act as acceptor
                 try:
                     out_socks[int(leader_id)].sendall(f"FORWARD_{idNum}_{user_input}".encode())
@@ -158,7 +161,7 @@ def get_user_input():
 
 def handle_msg(data, conn, addr):
     """simulates network delay then handles received message"""
-    global promises, accepted, leader_id
+    global promises, accepted, leader_id, ballotNum, lastAcceptedID
     blockchain_filename = f"N{idNum}_blockchain_log.txt"
     blog_filename = f"N{idNum}_blog_log.txt"
     sleep(3) 
@@ -166,10 +169,12 @@ def handle_msg(data, conn, addr):
     try:
         if data.split("_")[0] == "PREPARE" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved PREPARE from N{data.split('_')[1]}")
+            if (ballotNum < int(data.split("_")[7])):
+                ballotNum = int(data.split("_")[7])
             op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
-            out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}".encode())
+            out_socks[int(data.split("_")[1])].sendall(f"PROMISE_{idNum}_{op_string}_{ballotNum}".encode())
+            print("my ballotNum is now " + str(ballotNum))
         if data.split("_")[0] == "PROMISE":
-            sleep(0.5)
             print(f"recieved PROMISE from N{data.split('_')[1]}")
             promises += 1
             if promises >= math.ceil((len(out_socks) + 1)/2):
@@ -180,14 +185,20 @@ def handle_msg(data, conn, addr):
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
+                    sleep(0.2)
         if data.split("_")[0] == "ACCEPT" and int(data.split("_")[2]) >= blockchain.get_depth():
             print(f"recieved ACCEPT from N{data.split('_')[1]}")
-            leader_id = int(data.split("_")[1])
-            op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
-            out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
-            with open(blockchain_filename, "a") as log:
-                    log.write(f"TENATIVE {op_string}\n")
+            if (int(data.split("_")[8]) > ballotNum or (int(data.split("_")[8]) == ballotNum and int(data.split("_")[1]) > lastAcceptedID)):
+                lastAcceptedID = int(data.split("_")[1])
+                leader_id = int(data.split("_")[1])
+                op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
+                out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
+                with open(blockchain_filename, "a") as log:
+                        log.write(f"TENATIVE {op_string}\n")
+            else:
+                print(f"not replying to ACCEPT from N{data.split('_')[1]}")
+
         if data.split("_")[0] == "ACCEPTED":
             sleep(0.5) 
             print(f"recieved ACCEPTED from N{data.split('_')[1]}")
@@ -226,13 +237,15 @@ def handle_msg(data, conn, addr):
                 print(f"NEW COMMENT: on {data.split('_')[4]} from {data.split('_')[3]}")
         if data.split("_")[0] == "FORWARD":
             print(f"recieved FORWARD from {data.split('_')[1]}")
+            ballotNum += 1
             if leader_id == idNum:
                 op_string = data.split("_")[2] + "_" + data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5]
                 QUEUE.append(op_string)
                 new_block = Block(blockchain.get_latest_block().hash, data.split("_")[2], data.split("_")[3], data.split("_")[4], data.split("_")[5])
                 new_block.mine_block(blockchain.difficulty)
+                print("sending ballotNum of: " + str(ballotNum))
                 for node in out_socks.values():
-                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}".encode())
+                    node.sendall(f"ACCEPT_{idNum}_{blockchain.get_depth()}_{new_block.op}_{new_block.username}_{new_block.title}_{new_block.content}_{new_block.nonce}_{ballotNum}".encode())
             else:
                 out_socks[leader_id].sendall(f"FORWARD_{idNum}_{op_string}".encode())
         if data.split(" ")[0] == "RECONNECT":
@@ -333,6 +346,8 @@ if __name__ == "__main__":
     leader_id = None
     promises = 0
     accepted = 0
+    ballotNum = 0
+    lastAcceptedID = 0
     IP = socket.gethostname()
     PORT = 9000 + idNum
     QUEUE = []
