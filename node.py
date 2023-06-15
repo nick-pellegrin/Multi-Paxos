@@ -94,8 +94,12 @@ def get_user_input():
                     line = line[:-1] # remove newline character
                     blog.add_post(line.split("_")[0], line.split("_")[1], line.split("_")[2], line.split("_")[3])
                 print("LOAD COMPLETE", flush=True)
-            except:
+            except Exception:
                 print("LOAD FAILED", flush=True)
+                traceback.print_exc()
+            
+            # except:
+            #     print("LOAD FAILED", flush=True)
 
         if user_input.split("_")[0] == "post" or user_input.split("_")[0] == "comment": 
             if user_input.split("_")[0] == "comment" and blockchain.get_postexists(user_input.split("_")[2]) == False:
@@ -191,6 +195,8 @@ def get_user_input():
             print(out_socks.keys())
         if user_input == "ballot":
             print(ballotNum)
+        if user_input == "clean":
+            delete_outbound_connections()
                 
 
 
@@ -248,7 +254,7 @@ def handle_msg(data, conn, addr):
                 op_string = data.split("_")[3] + "_" + data.split("_")[4] + "_" + data.split("_")[5] + "_" + data.split("_")[6]
                 out_socks[int(data.split("_")[1])].sendall(f"ACCEPTED_{idNum}_{op_string}".encode())
                 with open(blockchain_filename, "a") as log:
-                        log.write(f"TENATIVE {op_string}\n")
+                        log.write(f"TENATIVE_{op_string}\n")
             else:
                 print(f"not replying to ACCEPT from N{data.split('_')[1]}")
         if data.split("_")[0] == "ACCEPTED":
@@ -390,7 +396,7 @@ def initiate_timeout():
             break
     if timeout_count == 10:
         print("TIMEOUT")
-        leader_id = None
+        # leader_id = None
         return("timeout")
     return("no timeout")
     
