@@ -1,5 +1,5 @@
 # Multi-Paxos Summary
-This project simulates a distributed blog system with 5 server nodes that communicate using the Multi-Paxos message passing protocol.  The system is fault tolerant and replicated across all nodes.  The project creates a blog object to store the data on each node with a custom made blockchain to ensure data correctness.  In addition to the blog data object and blockchain, all data from both is backed up to text files so that data can be recovered in the event of a failure or to ensure correctness with other nodes.  
+This project simulates a distributed blog system (using sockets) with 5 server nodes that communicate using the Multi-Paxos message passing protocol.  The system is fault tolerant and replicated across all nodes.  The project creates a blog object to store the data on each node with a custom made blockchain to ensure data correctness.  In addition to the blog data object and blockchain, all data from both is backed up to text files so that data can be recovered in the event of a failure or to ensure correctness with other nodes.  
 
 # Replicated Blog 
 The blog object supports the following write operations:  
